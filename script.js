@@ -286,17 +286,25 @@ document.addEventListener('DOMContentLoaded', () => {
         let profile = await DB.getUserProfile(session.user.id);
         
         if (!profile) {
-            // Robust fix: If profile is missing (e.g. manual creation in dashboard), create one now
-            console.warn('Profile missing for authenticated user. Creating default...');
-            profile = {
-                id: session.user.id,
-                full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-                role: 'Support Agent'
-            };
-            
-            // Try to save this missing profile to database
-            const payload = { id: profile.id, full_name: profile.full_name, role: profile.role };
-            await supabaseClient.from('profiles').insert([payload]);
+            console.warn('Profile missing for authenticated user. Attempting auto-creation...');
+            try {
+                profile = {
+                    id: session.user.id,
+                    full_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                    role: 'Support Agent'
+                };
+                
+                // Try to save this missing profile to database
+                const payload = { id: profile.id, full_name: profile.full_name, role: profile.role };
+                const { error: insertError } = await supabaseClient.from('profiles').insert([payload]);
+                
+                if (insertError) {
+                    console.error('Failed to auto-create profile:', insertError.message);
+                    // We continue anyway, so the user isn't stuck outside
+                }
+            } catch (profileErr) {
+                console.error('Critical error during profile initialization:', profileErr);
+            }
         }
 
         document.getElementById('current-user-name').innerText = profile.full_name || session.user.email;
