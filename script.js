@@ -5,7 +5,7 @@ const STORAGE_KEYS = {
 // Supabase Configuration
 // IMPORTANT: Replace these with your actual Supabase project details
 const SUPABASE_URL = 'https://cpyjekzfuxowbkfzagbq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_z0P-AN1c-s7yBxUNC6BEsQ_oRU6MTC0';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNweWpla3pmdXhvd2JrZnphZ2JxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNjk0NTksImV4cCI6MjA5MTY0NTQ1OX0.kHx2xddQd2zyOTniMM1T4f1Y047HHJd8Cemuqdqcaew';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Data Access Object (Rewritten for Supabase Auth)
