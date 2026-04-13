@@ -69,34 +69,40 @@ const DB = {
         const payload = {
             name: company.name,
             slug: company.slug,
-            category_id: company.categoryId,
-            email: company.email,
-            phone: company.phone,
-            address: company.address,
-            sub_start: company.sub_start || company.subscription?.start,
-            sub_end: company.sub_end || company.subscription?.end,
-            sub_users: company.sub_users || company.subscription?.users,
-            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial
+            category_id: company.categoryId || null,
+            email: company.email || null,
+            phone: company.phone || null,
+            address: company.address || null,
+            sub_start: company.sub_start || company.subscription?.start || null,
+            sub_end: company.sub_end || company.subscription?.end || null,
+            sub_users: company.sub_users || company.subscription?.users || null,
+            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial || false
         };
         const { data, error } = await supabaseClient.from('companies').insert([payload]).select();
-        if (error) console.error('Error adding company:', error);
+        if (error) {
+            console.error('Error adding company:', error);
+            alert('Database Error: ' + error.message);
+        }
         return data ? data[0] : null;
     },
     async updateCompany(id, company) {
         const payload = {
             name: company.name,
             slug: company.slug,
-            category_id: company.categoryId,
-            email: company.email,
-            phone: company.phone,
-            address: company.address,
-            sub_start: company.sub_start || company.subscription?.start,
-            sub_end: company.sub_end || company.subscription?.end,
-            sub_users: company.sub_users || company.subscription?.users,
-            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial
+            category_id: company.categoryId || null,
+            email: company.email || null,
+            phone: company.phone || null,
+            address: company.address || null,
+            sub_start: company.sub_start || company.subscription?.start || null,
+            sub_end: company.sub_end || company.subscription?.end || null,
+            sub_users: company.sub_users || company.subscription?.users || null,
+            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial || false
         };
         const { error } = await supabaseClient.from('companies').update(payload).eq('id', id);
-        if (error) console.error('Error updating company:', error);
+        if (error) {
+            console.error('Error updating company:', error);
+            alert('Database Error: ' + error.message);
+        }
     },
     async deleteCompany(id) {
         const { error } = await supabaseClient.from('companies').delete().eq('id', id);
@@ -167,8 +173,11 @@ const DB = {
         if (error) console.error('Error updating ticket details:', error);
     },
     async updateTicketAssignee(id, assigneeId) {
-        const { error } = await supabaseClient.from('tickets').update({ assignee_id: assigneeId }).eq('id', id);
-        if (error) console.error('Error updating ticket assignee:', error);
+        const { error } = await supabaseClient.from('tickets').update({ assignee_id: assigneeId || null }).eq('id', id);
+        if (error) {
+            console.error('Error updating ticket assignee:', error);
+            alert('Database Error: ' + error.message);
+        }
     },
     async deleteTicket(id) {
         const { error } = await supabaseClient.from('tickets').delete().eq('id', id);
