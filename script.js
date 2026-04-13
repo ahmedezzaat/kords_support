@@ -781,8 +781,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </td>
                     </tr>
                 `).join('');
-            }
-            }
         }
 
         // Render Activity Timeline
