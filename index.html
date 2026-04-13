@@ -434,8 +434,8 @@
                         </div>
                         <div class="actions">
                             <button class="btn btn-outline" id="btn-edit-company"><i class="ri-edit-line"></i> Edit</button>
-                            <button class="btn btn-primary" id="btn-add-contact"><i class="ri-user-add-line"></i> Add
-                                Contact</button>
+                            <button class="btn btn-outline" id="btn-add-activity" style="color:var(--primary);"><i class="ri-history-line"></i> Log Activity</button>
+                            <button class="btn btn-primary" id="btn-add-contact"><i class="ri-user-add-line"></i> Add Contact</button>
                         </div>
                     </div>
 
@@ -499,28 +499,44 @@
                         </div>
                     </div>
 
-                    <!-- Tickets under Company -->
-                    <div class="card mt-lg">
-                        <div class="card-header flex-between">
-                            <h3>Company Tickets</h3>
-                            <button class="btn btn-primary btn-small" id="btn-add-ticket"><i class="ri-add-line"></i>
-                                Create Ticket</button>
+                    <div class="grid-2 mt-lg">
+                        <!-- Activity Timeline -->
+                        <div class="card">
+                            <div class="card-header flex-between">
+                                <h3>Activity Timeline</h3>
+                                <span class="badge" id="activity-count">0 Activities</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="activity-timeline" class="activity-timeline">
+                                    <!-- Timeline items will be injected here -->
+                                    <div style="text-align:center; padding: 40px 0; color: var(--text-muted);">
+                                        No interactions logged yet.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="card-body p-0">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Issue Title</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Attachment</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="company-tickets-table-body">
-                                    <!-- Rendered dynamically -->
-                                </tbody>
-                            </table>
+
+                        <!-- Tickets under Company (Moved into Grid) -->
+                        <div class="card">
+                            <div class="card-header flex-between">
+                                <h3>Company Tickets</h3>
+                                <button class="btn btn-primary btn-small" id="btn-add-ticket"><i class="ri-add-line"></i> Create Ticket</button>
+                            </div>
+                            <div class="card-body p-0">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Title</th>
+                                            <th>Priority</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="company-tickets-table-body">
+                                        <!-- Rendered dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -736,6 +752,48 @@
                         <button type="button" class="btn btn-outline js-modal-close">Cancel</button>
                         <button type="submit" class="btn btn-primary">Save Ticket</button>
                     </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Log Activity -->
+    <div class="modal-overlay" id="modal-activity">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Log Interaction</h2>
+                <button class="btn-close js-modal-close"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-activity">
+                    <input type="hidden" id="activityCompanyId">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Activity Type</label>
+                            <select id="activityType" required>
+                                <option value="Email">📧 Email</option>
+                                <option value="WhatsApp">📱 WhatsApp</option>
+                                <option value="Call">📞 Phone Call</option>
+                                <option value="Meeting">🤝 Meeting</option>
+                                <option value="Note">📝 General Note</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Date & Time</label>
+                            <input type="datetime-local" id="activityDate" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Person (Optional)</label>
+                        <select id="activityContactId">
+                            <option value="">Select a contact...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Details / Summary</label>
+                        <textarea id="activityDescription" rows="4" placeholder="What happened during this interaction?" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px; padding: 12px 20px;">Save Activity</button>
                 </form>
             </div>
         </div>

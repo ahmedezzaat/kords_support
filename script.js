@@ -189,6 +189,36 @@ const DB = {
         if (error) console.error('Error deleting ticket:', error);
     },
 
+    // Activities
+    async getActivitiesByCompany(companyId) {
+        const { data, error } = await supabaseClient.from('activities')
+            .select(`
+                *,
+                profiles (full_name),
+                contacts (name)
+            `)
+            .eq('company_id', companyId)
+            .order('activity_date', { ascending: false });
+        if (error) console.error('Error fetching activities:', error);
+        return data || [];
+    },
+    async addActivity(activity) {
+        const payload = {
+            company_id: activity.companyId,
+            contact_id: activity.contactId || null,
+            staff_id: activity.staffId,
+            type: activity.type,
+            description: activity.description,
+            activity_date: activity.activityDate
+        };
+        const { data, error } = await supabaseClient.from('activities').insert([payload]).select();
+        if (error) {
+            console.error('Error adding activity:', error);
+            alert('Database Error: ' + error.message);
+        }
+        return data ? data[0] : null;
+    },
+
     // Comments
     async getComments(ticketId) {
         const { data, error } = await supabaseClient.from('comments').select('*').eq('ticket_id', ticketId).order('created_at');
@@ -442,9 +472,53 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('ticket');
     });
 
+    document.getElementById('btn-add-activity').addEventListener('click', async () => {
+        if (!currentCompanyId) return;
+        document.getElementById('form-activity').reset();
+        document.getElementById('activityCompanyId').value = currentCompanyId;
+        
+        // Set default date to now
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('activityDate').value = now.toISOString().slice(0, 16);
+        
+        // Populate contacts dropdown
+        const contacts = await DB.getContactsByCompany(currentCompanyId);
+        const contactSelect = document.getElementById('activityContactId');
+        contactSelect.innerHTML = '<option value="">Select a contact...</option>' + 
+            contacts.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
+            
+        openModal('activity');
+    });
+
     document.getElementById('btn-edit-company').addEventListener('click', () => {
         if (currentCompanyId) window.editCompany(currentCompanyId);
     });
+
+    // Activity Form Handler
+    const formActivity = document.getElementById('form-activity');
+    if (formActivity) {
+        formActivity.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const session = await DB.getSession();
+            if (!session) return;
+
+            const activityData = {
+                companyId: document.getElementById('activityCompanyId').value,
+                contactId: document.getElementById('activityContactId').value,
+                type: document.getElementById('activityType').value,
+                activityDate: document.getElementById('activityDate').value,
+                description: document.getElementById('activityDescription').value,
+                staffId: session.user.id
+            };
+
+            const success = await DB.addActivity(activityData);
+            if (success) {
+                closeModal('activity');
+                await renderActivityTimeline(currentCompanyId);
+            }
+        });
+    }
 
     /** Render Dashboard **/
     async function updateDashboard() {
@@ -700,6 +774,59 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `).join('');
             }
+            }
+        }
+
+        // Render Activity Timeline
+        await renderActivityTimeline(id);
+    }
+
+    async function renderActivityTimeline(companyId) {
+        const timeline = document.getElementById('activity-timeline');
+        const countBadge = document.getElementById('activity-count');
+        const activities = await DB.getActivitiesByCompany(companyId);
+        
+        if (countBadge) countBadge.innerText = `${activities.length} ${activities.length === 1 ? 'Activity' : 'Activities'}`;
+
+        if (activities.length === 0) {
+            timeline.innerHTML = `<div style="text-align:center; padding: 40px 0; color: var(--text-muted); background:var(--bg-surface-hover); border-radius:var(--radius-sm); border:1px dashed var(--border-color);">No interactions logged yet.</div>`;
+            return;
+        }
+
+        const typeIcons = {
+            'Email': 'ri-mail-line',
+            'WhatsApp': 'ri-whatsapp-line',
+            'Call': 'ri-phone-line',
+            'Meeting': 'ri-group-line',
+            'Note': 'ri-sticky-note-line'
+        };
+
+        timeline.innerHTML = activities.map(a => {
+            const date = new Date(a.activity_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+            const staffName = a.profiles?.full_name || 'Staff Member';
+            const contactName = a.contacts?.name ? `with <strong>${escapeHTML(a.contacts.name)}</strong>` : '';
+            const icon = typeIcons[a.type] || 'ri-history-line';
+            
+            return `
+                <div class="timeline-item" style="position:relative; padding-left:36px; margin-bottom:24px;">
+                    <div style="position:absolute; left:0; top:4px; width:24px; height:24px; background:var(--bg-surface-hover); border:1px solid var(--border-color); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--primary); font-size:14px; z-index:1;">
+                        <i class="${icon}"></i>
+                    </div>
+                    <div class="timeline-line" style="position:absolute; left:11px; top:28px; bottom:-24px; width:2px; background:var(--border-color); z-index:0;"></div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:4px;">
+                        <span>${date}</span> &bull; <span>${escapeHTML(staffName)}</span> ${contactName}
+                    </div>
+                    <div style="font-size:0.95rem; font-weight:600; color:var(--text-main); margin-bottom:6px;">${a.type}</div>
+                    <div style="font-size:0.9rem; color:var(--text-soft); line-height:1.5; padding: 10px; background:var(--bg-surface); border-radius:var(--radius-sm); border-left:3px solid var(--primary);">${escapeHTML(a.description)}</div>
+                </div>
+            `;
+        }).join('');
+        
+        // Hide the last line
+        const items = timeline.querySelectorAll('.timeline-item');
+        if (items.length > 0) {
+            const lastLine = items[items.length - 1].querySelector('.timeline-line');
+            if (lastLine) lastLine.style.display = 'none';
         }
     }
 
