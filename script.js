@@ -282,14 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const btnLogout = document.getElementById('btn-logout');
-    if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
-            DB.set(STORAGE_KEYS.SESSION, null);
-            checkAuth();
-        });
-    }
-
     async function switchView(targetId) {
         // Toggle Nav active state
         navItems.forEach(nav => {
