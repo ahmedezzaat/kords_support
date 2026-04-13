@@ -1209,9 +1209,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Init App
-    (async () => {
+    // Use onAuthStateChange for more robust session persistence across refreshes
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state changed:', event);
         if (await checkAuth()) {
             await updateDashboard();
         }
+    });
+
+    // Initial explicit check (optional but good for immediate UI feedback)
+    (async () => {
+        await checkAuth();
     })();
 });
