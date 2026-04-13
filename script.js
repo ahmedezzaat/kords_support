@@ -17,6 +17,17 @@ const DB = {
     async signOut() {
         return await supabaseClient.auth.signOut();
     },
+    async signUp(email, password, fullName) {
+        return await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: fullName
+                }
+            }
+        });
+    },
     async getSession() {
         const { data } = await supabaseClient.auth.getSession();
         return data.session;
@@ -206,7 +217,7 @@ const DB = {
  * UI Rendering & Logic
  */
 document.addEventListener('DOMContentLoaded', () => {
-    initStorage();
+    // initStorage removed as we are now using Supabase
     
     // Global State
     let currentCompanyId = null;
@@ -279,6 +290,61 @@ document.addEventListener('DOMContentLoaded', () => {
         btnLogout.addEventListener('click', async () => {
             await DB.signOut();
             await checkAuth();
+        });
+    }
+
+    // Toggle between Login and Signup
+    const linkToSignup = document.getElementById('link-to-signup');
+    const linkToLogin = document.getElementById('link-to-login');
+    const authTitle = document.getElementById('auth-title');
+    const authSubtitle = document.getElementById('auth-subtitle');
+    const signupForm = document.getElementById('form-signup');
+    
+    function showSignup() {
+        formLogin.style.display = 'none';
+        signupForm.style.display = 'block';
+        authTitle.innerText = "Join the Team";
+        authSubtitle.innerText = "Create your staff account to get started.";
+    }
+
+    function showLogin() {
+        signupForm.style.display = 'none';
+        formLogin.style.display = 'block';
+        authTitle.innerText = "Welcome Back";
+        authSubtitle.innerText = "Enter your staff credentials to access the dashboard.";
+    }
+
+    if (linkToSignup) linkToSignup.onclick = (e) => { e.preventDefault(); showSignup(); };
+    if (linkToLogin) linkToLogin.onclick = (e) => { e.preventDefault(); showLogin(); };
+
+    // Signup Form Handler
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fullName = document.getElementById('signupName').value.trim();
+            const email = document.getElementById('signupEmail').value.trim();
+            const password = document.getElementById('signupPassword').value.trim();
+            const errorBlock = document.getElementById('signup-error');
+            const successBlock = document.getElementById('signup-success');
+            
+            const { data, error } = await DB.signUp(email, password, fullName);
+            
+            if (error) {
+                errorBlock.innerText = error.message;
+                errorBlock.style.display = 'block';
+                successBlock.style.display = 'none';
+            } else {
+                errorBlock.style.display = 'none';
+                successBlock.style.display = 'block';
+                signupForm.reset();
+                
+                // If auto-login is possible (confirmation off)
+                if (data.session) {
+                    setTimeout(() => {
+                        checkAuth().then(ok => { if(ok) switchView('dashboard-view'); });
+                    }, 1500);
+                }
+            }
         });
     }
 
@@ -1103,6 +1169,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 '"': '&quot;'
             }[tag])
         );
+    }
+
+    // Modal Helpers
+    window.openModal = function(type) {
+        const modal = document.getElementById(`modal-${type}`);
+        if (modal) modal.classList.add('active');
+    }
+    
+    window.closeModal = function(type) {
+        const modal = document.getElementById(`modal-${type}`);
+        if (modal) modal.classList.remove('active');
+    }
+    
+    // Close modals on clicking outside
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.classList.remove('active');
+        }
     }
 
     // Init App
