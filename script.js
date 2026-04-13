@@ -5,8 +5,8 @@ const STORAGE_KEYS = {
     COMPANIES: 'cs_portal_companies',
     CATEGORIES: 'cs_portal_categories',
     TICKETS: 'cs_portal_tickets',
-    TICKETS: 'cs_portal_tickets',
     COMMENTS: 'cs_portal_comments',
+    CONTACTS: 'cs_portal_contacts',
     USERS: 'cs_portal_users',
     SESSION: 'cs_portal_session',
     APP_SETTINGS: 'cs_portal_settings'
@@ -70,6 +70,14 @@ const DB = {
         company.createdAt = new Date().toISOString();
         curr.push(company);
         this.set(STORAGE_KEYS.COMPANIES, curr);
+    },
+    updateCompany(id, updates) {
+        const curr = this.getCompanies();
+        const index = curr.findIndex(c => c.id === id);
+        if (index !== -1) {
+            curr[index] = { ...curr[index], ...updates };
+            this.set(STORAGE_KEYS.COMPANIES, curr);
+        }
     },
     deleteCompany(id) {
         const curr = this.getCompanies().filter(c => c.id !== id);
@@ -307,6 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-add-company').addEventListener('click', () => {
         populateCategoryDropdown();
         document.getElementById('form-company').reset();
+        document.getElementById('compId').value = '';
+        document.getElementById('subscription-fields').style.display = 'none';
+        document.getElementById('modal-company-title').innerText = 'Add New Company';
+        document.getElementById('btn-save-company').innerText = 'Save Company';
         openModal('company');
     });
 
@@ -367,18 +379,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formCompany.addEventListener('submit', (e) => {
         e.preventDefault();
-        const newComp = {
+        const id = document.getElementById('compId').value;
+        const companyData = {
             name: document.getElementById('compName').value,
             slug: document.getElementById('compSlug').value,
             categoryId: document.getElementById('compCategory').value,
             email: document.getElementById('compEmail').value,
             phone: document.getElementById('compPhone').value,
-            address: document.getElementById('compAddress').value
+            address: document.getElementById('compAddress').value,
+            subscription: {
+                start: document.getElementById('compSubStart').value,
+                end: document.getElementById('compSubEnd').value,
+                users: document.getElementById('compSubUsers').value,
+                isTrial: document.getElementById('compSubIsTrial').checked
+            }
         };
-        DB.addCompany(newComp);
+
+        if (id) {
+            DB.updateCompany(id, companyData);
+        } else {
+            DB.addCompany(companyData);
+        }
+
         closeModal('company');
         renderCompaniesList();
         updateDashboard();
+        if (id && currentCompanyId === id) loadCompanyDetails(id);
     });
 
     // We expose global functions for inline onclick handlers inside generated innerHTML
@@ -396,6 +422,38 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCompaniesList();
             updateDashboard();
         }
+    };
+
+    window.editCompany = (id) => {
+        const comp = DB.getCompany(id);
+        if (!comp) return;
+
+        populateCategoryDropdown();
+        document.getElementById('compId').value = comp.id;
+        document.getElementById('compName').value = comp.name;
+        document.getElementById('compSlug').value = comp.slug || '';
+        document.getElementById('compCategory').value = comp.categoryId || '';
+        document.getElementById('compEmail').value = comp.email || '';
+        document.getElementById('compPhone').value = comp.phone || '';
+        document.getElementById('compAddress').value = comp.address || '';
+
+        // Subscription fields
+        if (comp.subscription) {
+            document.getElementById('compSubStart').value = comp.subscription.start || '';
+            document.getElementById('compSubEnd').value = comp.subscription.end || '';
+            document.getElementById('compSubUsers').value = comp.subscription.users || '';
+            document.getElementById('compSubIsTrial').checked = comp.subscription.isTrial || false;
+        } else {
+            document.getElementById('compSubStart').value = '';
+            document.getElementById('compSubEnd').value = '';
+            document.getElementById('compSubUsers').value = '';
+            document.getElementById('compSubIsTrial').checked = false;
+        }
+
+        document.getElementById('subscription-fields').style.display = 'block';
+        document.getElementById('modal-company-title').innerText = 'Edit Company';
+        document.getElementById('btn-save-company').innerText = 'Update Company';
+        openModal('company');
     };
 
     function populateCategoryDropdown() {
@@ -472,6 +530,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('detail-company-phone').innerText = comp.phone || '-';
         document.getElementById('detail-company-email').innerText = comp.email || '-';
         document.getElementById('detail-company-address').innerText = comp.address || '-';
+
+        // Render subscription info
+        const subDisplay = document.getElementById('subscription-info-display');
+        if (comp.subscription && (comp.subscription.start || comp.subscription.end || comp.subscription.users)) {
+            subDisplay.style.display = 'block';
+            document.getElementById('display-sub-start').innerText = comp.subscription.start || 'Not set';
+            document.getElementById('display-sub-end').innerText = comp.subscription.end || 'Not set';
+            document.getElementById('display-sub-users').innerText = comp.subscription.users || 'Unlimited';
+            document.getElementById('display-sub-trial').style.display = comp.subscription.isTrial ? 'inline-block' : 'none';
+        } else {
+            subDisplay.style.display = 'none';
+        }
 
         // Render Contacts
         const contacts = DB.getContactsByCompany(id);

@@ -404,7 +404,7 @@
                             <p class="badge" id="detail-company-category">Category</p>
                         </div>
                         <div class="actions">
-                            <button class="btn btn-outline"><i class="ri-edit-line"></i> Edit</button>
+                            <button class="btn btn-outline" onclick="editCompany(currentCompanyId)"><i class="ri-edit-line"></i> Edit</button>
                             <button class="btn btn-primary" id="btn-add-contact"><i class="ri-user-add-line"></i> Add
                                 Contact</button>
                         </div>
@@ -428,6 +428,21 @@
                                     </div>
                                     <div class="info-item">
                                         <i class="ri-map-pin-line"></i> <span id="detail-company-address">address</span>
+                                    </div>
+                                    <div id="subscription-info-display" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color); display: none;">
+                                        <h4 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">Subscription Details</h4>
+                                        <div class="info-list" style="gap: 8px;">
+                                            <div class="info-item" style="font-size: 0.9rem;">
+                                                <i class="ri-calendar-event-line"></i> <strong>Start:</strong> <span id="display-sub-start">-</span>
+                                            </div>
+                                            <div class="info-item" style="font-size: 0.9rem;">
+                                                <i class="ri-calendar-check-line"></i> <strong>End:</strong> <span id="display-sub-end">-</span>
+                                            </div>
+                                            <div class="info-item" style="font-size: 0.9rem;">
+                                                <i class="ri-group-line"></i> <strong>Users:</strong> <span id="display-sub-users">-</span>
+                                            </div>
+                                            <div id="display-sub-trial" class="badge badge-feature" style="display: inline-block; width: fit-content; margin-top: 4px;">Trial Version</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -491,11 +506,12 @@
     <div class="modal-overlay" id="modal-company">
         <div class="modal">
             <div class="modal-header">
-                <h2>Add New Company</h2>
+                <h2 id="modal-company-title">Add New Company</h2>
                 <button class="btn-close js-modal-close"><i class="ri-close-line"></i></button>
             </div>
             <div class="modal-body">
                 <form id="form-company">
+                    <input type="hidden" id="compId">
                     <div class="form-group">
                         <label>Company Name</label>
                         <input type="text" id="compName" required>
@@ -526,9 +542,37 @@
                         <label>Location Address</label>
                         <textarea id="compAddress" rows="3"></textarea>
                     </div>
+
+                    <!-- Subscription Fields (Edit Mode Only) -->
+                    <div id="subscription-fields" style="display:none; margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--bg-surface-hover);">
+                        <h3 style="margin-bottom: 16px; font-size: 1rem; color: var(--primary);">Subscription Management</h3>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Start Date</label>
+                                <input type="date" id="compSubStart">
+                            </div>
+                            <div class="form-group">
+                                <label>End Date</label>
+                                <input type="date" id="compSubEnd">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Max User Count</label>
+                                <input type="number" id="compSubUsers" min="1" placeholder="10">
+                            </div>
+                            <div class="form-group" style="display:flex; align-items:flex-end; padding-bottom:12px;">
+                                <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                    <input type="checkbox" id="compSubIsTrial">
+                                    <span style="font-weight:500;">Is Trial License</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline js-modal-close">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Company</button>
+                        <button type="submit" class="btn btn-primary" id="btn-save-company">Save Company</button>
                     </div>
                 </form>
             </div>

@@ -254,6 +254,22 @@ input, select, textarea { font-family: inherit; }
     align-items: center;
 }
 
+/* Checkbox Styling */
+.checkbox-container {
+    user-select: none;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.border-dashed {
+    border: 2px dashed var(--border-color);
+}
+
 .mt-lg { margin-top: 32px; }
 .mb-sm { margin-bottom: 16px; }
 .p-0 { padding: 0 !important; }
