@@ -1,180 +1,205 @@
-/**
- * State Management with Local Storage
- */
 const STORAGE_KEYS = {
-    COMPANIES: 'cs_portal_companies',
-    CATEGORIES: 'cs_portal_categories',
-    TICKETS: 'cs_portal_tickets',
-    COMMENTS: 'cs_portal_comments',
-    CONTACTS: 'cs_portal_contacts',
-    USERS: 'cs_portal_users',
-    SESSION: 'cs_portal_session',
     APP_SETTINGS: 'cs_portal_settings'
 };
 
-// Initialize empty states inside localstorage if missing
-const initStorage = () => {
-    if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) {
-        localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify([
-            { id: generateId(), name: "Technology" },
-            { id: generateId(), name: "Healthcare" }
-        ]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.COMPANIES)) {
-        localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.CONTACTS)) {
-        localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.TICKETS)) {
-        localStorage.setItem(STORAGE_KEYS.TICKETS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.COMMENTS)) {
-        localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify([]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.USERS)) {
-        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify([
-            { id: generateId(), name: "System Admin", email: "admin@portal.com", role: "Admin", createdAt: new Date().toISOString() }
-        ]));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.APP_SETTINGS)) {
-        localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify({ github_repo: '', github_token: '' }));
-    }
-};
+// Supabase Configuration
+// IMPORTANT: Replace these with your actual Supabase project details
+const SUPABASE_URL = 'https://cpyjekzfuxowbkfzagbq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_z0P-AN1c-s7yBxUNC6BEsQ_oRU6MTC0';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
-
-// Data Access Object
+// Data Access Object (Rewritten for Supabase Auth)
 const DB = {
-    get(key) { return JSON.parse(localStorage.getItem(key)); },
-    set(key, data) { localStorage.setItem(key, JSON.stringify(data)); },
-    
-    // Categories
-    getCategories() { return this.get(STORAGE_KEYS.CATEGORIES); },
-    addCategory(name) {
-        const cats = this.getCategories();
-        cats.push({ id: generateId(), name });
-        this.set(STORAGE_KEYS.CATEGORIES, cats);
+    // Auth & Identity
+    async signIn(email, password) {
+        return await supabaseClient.auth.signInWithPassword({ email, password });
     },
-    deleteCategory(id) {
-        const cats = this.getCategories().filter(c => c.id !== id);
-        this.set(STORAGE_KEYS.CATEGORIES, cats);
+    async signOut() {
+        return await supabaseClient.auth.signOut();
+    },
+    async getSession() {
+        const { data } = await supabaseClient.auth.getSession();
+        return data.session;
+    },
+    async getUserProfile(id) {
+        const { data, error } = await supabaseClient.from('profiles').select('*').eq('id', id).single();
+        if (error) console.error('Error fetching profile:', error);
+        return data;
+    },
+
+    // Categories
+    async getCategories() {
+        const { data, error } = await supabaseClient.from('categories').select('*').order('name');
+        if (error) console.error('Error fetching categories:', error);
+        return data || [];
+    },
+    async addCategory(name) {
+        const { data, error } = await supabaseClient.from('categories').insert([{ name }]).select();
+        if (error) console.error('Error adding category:', error);
+        return data ? data[0] : null;
+    },
+    async deleteCategory(id) {
+        const { error } = await supabaseClient.from('categories').delete().eq('id', id);
+        if (error) console.error('Error deleting category:', error);
     },
 
     // Companies
-    getCompanies() { return this.get(STORAGE_KEYS.COMPANIES); },
-    getCompany(id) { return this.getCompanies().find(c => c.id === id); },
-    addCompany(company) {
-        const curr = this.getCompanies();
-        company.id = generateId();
-        company.createdAt = new Date().toISOString();
-        curr.push(company);
-        this.set(STORAGE_KEYS.COMPANIES, curr);
+    async getCompanies() {
+        const { data, error } = await supabaseClient.from('companies').select('*').order('name');
+        if (error) console.error('Error fetching companies:', error);
+        return data || [];
     },
-    updateCompany(id, updates) {
-        const curr = this.getCompanies();
-        const index = curr.findIndex(c => c.id === id);
-        if (index !== -1) {
-            curr[index] = { ...curr[index], ...updates };
-            this.set(STORAGE_KEYS.COMPANIES, curr);
-        }
+    async getCompany(id) {
+        const { data, error } = await supabaseClient.from('companies').select('*').eq('id', id).single();
+        if (error) console.error('Error fetching company:', error);
+        return data;
     },
-    deleteCompany(id) {
-        const curr = this.getCompanies().filter(c => c.id !== id);
-        this.set(STORAGE_KEYS.COMPANIES, curr);
-        // Cascading delete contacts and tickets
-        const remContacts = this.getContacts().filter(c => c.companyId !== id);
-        this.set(STORAGE_KEYS.CONTACTS, remContacts);
-        const remTickets = this.getTickets().filter(t => t.companyId !== id);
-        this.set(STORAGE_KEYS.TICKETS, remTickets);
+    async addCompany(company) {
+        const payload = {
+            name: company.name,
+            slug: company.slug,
+            category_id: company.categoryId,
+            email: company.email,
+            phone: company.phone,
+            address: company.address,
+            sub_start: company.sub_start || company.subscription?.start,
+            sub_end: company.sub_end || company.subscription?.end,
+            sub_users: company.sub_users || company.subscription?.users,
+            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial
+        };
+        const { data, error } = await supabaseClient.from('companies').insert([payload]).select();
+        if (error) console.error('Error adding company:', error);
+        return data ? data[0] : null;
+    },
+    async updateCompany(id, company) {
+        const payload = {
+            name: company.name,
+            slug: company.slug,
+            category_id: company.categoryId,
+            email: company.email,
+            phone: company.phone,
+            address: company.address,
+            sub_start: company.sub_start || company.subscription?.start,
+            sub_end: company.sub_end || company.subscription?.end,
+            sub_users: company.sub_users || company.subscription?.users,
+            sub_is_trial: company.sub_is_trial || company.subscription?.isTrial
+        };
+        const { error } = await supabaseClient.from('companies').update(payload).eq('id', id);
+        if (error) console.error('Error updating company:', error);
+    },
+    async deleteCompany(id) {
+        const { error } = await supabaseClient.from('companies').delete().eq('id', id);
+        if (error) console.error('Error deleting company:', error);
     },
 
     // Contacts
-    getContacts() { return this.get(STORAGE_KEYS.CONTACTS); },
-    getContactsByCompany(companyId) {
-        return this.getContacts().filter(c => c.companyId === companyId);
+    async getContactsByCompany(companyId) {
+        const { data, error } = await supabaseClient.from('contacts').select('*').eq('company_id', companyId);
+        if (error) console.error('Error fetching contacts:', error);
+        return data || [];
     },
-    addContact(contact) {
-        const curr = this.getContacts();
-        contact.id = generateId();
-        contact.createdAt = new Date().toISOString();
-        curr.push(contact);
-        this.set(STORAGE_KEYS.CONTACTS, curr);
+    async addContact(contact) {
+        const payload = {
+            company_id: contact.company_id || contact.companyId,
+            name: contact.name,
+            position: contact.position,
+            email: contact.email,
+            phone: contact.phone
+        };
+        const { data, error } = await supabaseClient.from('contacts').insert([payload]).select();
+        if (error) console.error('Error adding contact:', error);
+        return data ? data[0] : null;
     },
-    deleteContact(id) {
-        const curr = this.getContacts().filter(c => c.id !== id);
-        this.set(STORAGE_KEYS.CONTACTS, curr);
+    async deleteContact(id) {
+        const { error } = await supabaseClient.from('contacts').delete().eq('id', id);
+        if (error) console.error('Error deleting contact:', error);
     },
 
     // Tickets
-    getTickets() { return this.get(STORAGE_KEYS.TICKETS); },
-    getTicketsByCompany(companyId) {
-        return this.getTickets().filter(t => t.companyId === companyId);
+    async getTickets() {
+        const { data, error } = await supabaseClient.from('tickets').select('*').order('created_at', { ascending: false });
+        if (error) console.error('Error fetching tickets:', error);
+        return data || [];
     },
-    addTicket(ticket) {
-        const curr = this.getTickets();
-        ticket.id = generateId();
-        ticket.createdAt = new Date().toISOString();
-        curr.push(ticket);
-        this.set(STORAGE_KEYS.TICKETS, curr);
+    async getTicketsByCompany(companyId) {
+        const { data, error } = await supabaseClient.from('tickets').select('*').eq('company_id', companyId);
+        if (error) console.error('Error fetching tickets by company:', error);
+        return data || [];
     },
-    updateTicketStatus(id, status) {
-        const curr = this.getTickets();
-        const t = curr.find(x => x.id === id);
-        if (t) { t.status = status; this.set(STORAGE_KEYS.TICKETS, curr); }
+    async addTicket(ticket) {
+        const payload = {
+            company_id: ticket.company_id || ticket.companyId,
+            title: ticket.title,
+            description: ticket.description || ticket.desc,
+            status: ticket.status,
+            priority: ticket.priority,
+            type: ticket.type,
+            filename: ticket.filename
+        };
+        const { data, error } = await supabaseClient.from('tickets').insert([payload]).select();
+        if (error) console.error('Error adding ticket:', error);
+        return data ? data[0] : null;
     },
-    deleteTicket(id) {
-        const curr = this.getTickets().filter(t => t.id !== id);
-        this.set(STORAGE_KEYS.TICKETS, curr);
+    async updateTicketStatus(id, status) {
+        const { error } = await supabaseClient.from('tickets').update({ status }).eq('id', id);
+        if (error) console.error('Error updating ticket status:', error);
     },
-    updateTicketDetails(id, updates) {
-        const curr = this.getTickets();
-        const t = curr.find(x => x.id === id);
-        if (t) {
-            if (updates.title) t.title = updates.title;
-            if (updates.desc) t.desc = updates.desc;
-            if (updates.priority) t.priority = updates.priority;
-            if (updates.type) t.type = updates.type;
-            if (updates.githubUrl) t.githubUrl = updates.githubUrl;
-            this.set(STORAGE_KEYS.TICKETS, curr);
-        }
+    async updateTicketDetails(id, updates) {
+        const payload = {
+            title: updates.title,
+            description: updates.description || updates.desc,
+            priority: updates.priority,
+            type: updates.type,
+            github_url: updates.github_url || updates.githubUrl
+        };
+        const { error } = await supabaseClient.from('tickets').update(payload).eq('id', id);
+        if (error) console.error('Error updating ticket details:', error);
+    },
+    async updateTicketAssignee(id, assigneeId) {
+        const { error } = await supabaseClient.from('tickets').update({ assignee_id: assigneeId }).eq('id', id);
+        if (error) console.error('Error updating ticket assignee:', error);
+    },
+    async deleteTicket(id) {
+        const { error } = await supabaseClient.from('tickets').delete().eq('id', id);
+        if (error) console.error('Error deleting ticket:', error);
     },
 
     // Comments
-    getComments(ticketId) { return this.get(STORAGE_KEYS.COMMENTS).filter(c => c.ticketId === ticketId); },
-    addComment(comment) {
-        const curr = this.get(STORAGE_KEYS.COMMENTS);
-        comment.id = generateId();
-        comment.createdAt = new Date().toISOString();
-        curr.push(comment);
-        this.set(STORAGE_KEYS.COMMENTS, curr);
+    async getComments(ticketId) {
+        const { data, error } = await supabaseClient.from('comments').select('*').eq('ticket_id', ticketId).order('created_at');
+        if (error) console.error('Error fetching comments:', error);
+        return data || [];
+    },
+    async addComment(comment) {
+        const payload = {
+            ticket_id: comment.ticketId,
+            text: comment.text,
+            type: comment.type
+        };
+        const { data, error } = await supabaseClient.from('comments').insert([payload]).select();
+        if (error) console.error('Error adding comment:', error);
+        return data ? data[0] : null;
     },
 
-    // Users
-    getUsers() { return this.get(STORAGE_KEYS.USERS); },
-    getUser(id) { return this.getUsers().find(u => u.id === id); },
-    
+    // Users (Profiles)
+    async getUsers() {
+        const { data, error } = await supabaseClient.from('profiles').select('*').order('full_name');
+        if (error) console.error('Error fetching profiles:', error);
+        return data || [];
+    },
+    async deleteUser(id) {
+        // Note: Real user deletion should happen via Supabase Admin API or Auth management dash
+        const { error } = await supabaseClient.from('profiles').delete().eq('id', id);
+        if (error) console.error('Error deleting profile:', error);
+    },
+
     // Settings
-    getSettings() { return this.get(STORAGE_KEYS.APP_SETTINGS) || {}; },
-    setSettings(settings) { this.set(STORAGE_KEYS.APP_SETTINGS, settings); },
-    addUser(user) {
-        const curr = this.getUsers();
-        user.id = generateId();
-        user.createdAt = new Date().toISOString();
-        curr.push(user);
-        this.set(STORAGE_KEYS.USERS, curr);
+    getSettings() { 
+        return JSON.parse(localStorage.getItem(STORAGE_KEYS.APP_SETTINGS) || '{}');
     },
-    deleteUser(id) {
-        const curr = this.getUsers().filter(u => u.id !== id);
-        this.set(STORAGE_KEYS.USERS, curr);
+    setSettings(settings) { 
+        localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(settings)); 
     },
-    
-    // Assignee updates
-    updateTicketAssignee(id, assigneeId) {
-        const curr = this.getTickets();
-        const t = curr.find(x => x.id === id);
-        if (t) { t.assigneeId = assigneeId; this.set(STORAGE_KEYS.TICKETS, curr); }
-    }
 };
 
 /**
@@ -191,31 +216,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewSections = document.querySelectorAll('.view-section');
 
     // Auth Logic
-    function checkAuth() {
-        const sessionUserId = DB.get(STORAGE_KEYS.SESSION);
+    async function checkAuth() {
         const loginLayout = document.getElementById('login-layout');
         const appLayout = document.getElementById('app-layout');
         
-        if (!sessionUserId) {
+        const session = await DB.getSession();
+        
+        if (!session) {
             loginLayout.style.display = 'flex';
             appLayout.style.display = 'none';
             return false;
         }
 
-        const user = DB.getUser(sessionUserId);
-        if (!user) {
-            DB.set(STORAGE_KEYS.SESSION, null);
+        const profile = await DB.getUserProfile(session.user.id);
+        if (!profile) {
+            // Profile not created yet (might happen if trigger fails or user is old)
+            // For now, treat as no auth or redirect to profile setup
+            console.error('No profile found for authenticated user');
+            await DB.signOut();
             loginLayout.style.display = 'flex';
             appLayout.style.display = 'none';
             return false;
         }
 
-        document.getElementById('current-user-name').innerText = user.name;
-        document.getElementById('current-user-role').innerText = user.role;
+        document.getElementById('current-user-name').innerText = profile.full_name || session.user.email;
+        document.getElementById('current-user-role').innerText = profile.role;
 
         navItems.forEach(nav => {
             if (nav.dataset.target === 'settings-view' || nav.dataset.target === 'team-view') {
-                nav.style.display = user.role === 'Admin' ? 'flex' : 'none';
+                nav.style.display = profile.role === 'Admin' ? 'flex' : 'none';
             }
         });
 
@@ -226,28 +255,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formLogin = document.getElementById('form-login');
     if (formLogin) {
-        formLogin.addEventListener('submit', (e) => {
+        formLogin.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
-            const users = DB.getUsers();
-            const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
             const errorBlock = document.getElementById('login-error');
             
-            if (foundUser) {
-                if (foundUser.password && foundUser.password !== password) {
-                    errorBlock.innerText = "Invalid credentials. Incorrect password.";
-                    errorBlock.style.display = 'block';
-                } else {
-                    errorBlock.style.display = 'none';
-                    DB.set(STORAGE_KEYS.SESSION, foundUser.id);
-                    formLogin.reset();
-                    if (checkAuth()) switchView('dashboard-view');
-                }
-            } else {
-                errorBlock.innerText = "Invalid credentials. Unknown user.";
+            const { data, error } = await DB.signIn(email, password);
+            
+            if (error) {
+                errorBlock.innerText = error.message;
                 errorBlock.style.display = 'block';
+            } else {
+                errorBlock.style.display = 'none';
+                formLogin.reset();
+                if (await checkAuth()) switchView('dashboard-view');
             }
+        });
+    }
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            await DB.signOut();
+            await checkAuth();
         });
     }
 
@@ -259,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function switchView(targetId) {
+    async function switchView(targetId) {
         // Toggle Nav active state
         navItems.forEach(nav => {
             if (nav.dataset.target === targetId) nav.classList.add('active');
@@ -272,11 +303,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Trigger updates based on view
-        if (targetId === 'dashboard-view') updateDashboard();
-        if (targetId === 'companies-view') renderCompaniesList();
-        if (targetId === 'settings-view') renderCategoriesList();
-        if (targetId === 'tickets-view') renderAllTickets();
-        if (targetId === 'team-view') renderTeamList();
+        if (targetId === 'dashboard-view') await updateDashboard();
+        if (targetId === 'companies-view') await renderCompaniesList();
+        if (targetId === 'settings-view') await renderCategoriesList();
+        if (targetId === 'tickets-view') await renderAllTickets();
+        if (targetId === 'team-view') await renderTeamList();
     }
 
     navItems.forEach(item => {
@@ -312,8 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Button triggers
-    document.getElementById('btn-add-company').addEventListener('click', () => {
-        populateCategoryDropdown();
+    document.getElementById('btn-add-company').addEventListener('click', async () => {
+        await populateCategoryDropdown();
         document.getElementById('form-company').reset();
         document.getElementById('compId').value = '';
         document.getElementById('subscription-fields').style.display = 'none';
@@ -339,36 +370,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /** Render Dashboard **/
-    function updateDashboard() {
-        document.getElementById('stat-companies').innerText = DB.getCompanies().length;
-        document.getElementById('stat-contacts').innerText = DB.getContacts().length;
-        document.getElementById('stat-tickets').innerText = DB.getTickets().length;
+    async function updateDashboard() {
+        const comps = await DB.getCompanies();
+        const tix = await DB.getTickets();
+        // For total contacts, we'd need a separate fetch or a complex query, 
+        // for now let's just count from fetched companies if we had contacts locally 
+        // but we'll leave it as a placeholder or fetch separately
+        document.getElementById('stat-companies').innerText = comps.length;
+        document.getElementById('stat-tickets').innerText = tix.length;
     }
 
     /** View: Settings (Categories) **/
     const formCategory = document.getElementById('form-category');
     const categoriesList = document.getElementById('categories-list');
 
-    formCategory.addEventListener('submit', (e) => {
+    formCategory.addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = document.getElementById('categoryName');
         const val = input.value.trim();
         if (val) {
-            DB.addCategory(val);
+            await DB.addCategory(val);
             input.value = '';
-            renderCategoriesList();
+            await renderCategoriesList();
         }
     });
 
-    window.deleteCategory = (id) => {
+    window.deleteCategory = async (id) => {
         if(confirm("Are you sure?")) {
-            DB.deleteCategory(id);
-            renderCategoriesList();
+            await DB.deleteCategory(id);
+            await renderCategoriesList();
         }
     };
 
-    function renderCategoriesList() {
-        const cats = DB.getCategories();
+    async function renderCategoriesList() {
+        const cats = await DB.getCategories();
         categoriesList.innerHTML = cats.map(c => `
             <li>
                 <span>${escapeHTML(c.name)}</span>
@@ -381,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const companiesTbody = document.getElementById('companies-table-body');
     const formCompany = document.getElementById('form-company');
 
-    formCompany.addEventListener('submit', (e) => {
+    formCompany.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('compId').value;
         const companyData = {
@@ -400,59 +435,52 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (id) {
-            DB.updateCompany(id, companyData);
+            await DB.updateCompany(id, companyData);
         } else {
-            DB.addCompany(companyData);
+            await DB.addCompany(companyData);
         }
 
         closeModal('company');
-        renderCompaniesList();
-        updateDashboard();
-        if (id && currentCompanyId === id) loadCompanyDetails(id);
+        await renderCompaniesList();
+        await updateDashboard();
+        if (id && currentCompanyId === id) await loadCompanyDetails(id);
     });
 
     // We expose global functions for inline onclick handlers inside generated innerHTML
-    window.viewCompany = (id) => {
+    window.viewCompany = async (id) => {
         currentCompanyId = id;
-        loadCompanyDetails(id);
-        switchView('company-details-view');
+        await loadCompanyDetails(id);
+        await switchView('company-details-view');
         // Unset any nav active highlight since this is a sub-page
         navItems.forEach(nav => nav.classList.remove('active'));
     };
 
-    window.deleteCompany = (id) => {
+    window.deleteCompany = async (id) => {
         if(confirm("Delete company and all its contacts?")) {
-            DB.deleteCompany(id);
-            renderCompaniesList();
-            updateDashboard();
+            await DB.deleteCompany(id);
+            await renderCompaniesList();
+            await updateDashboard();
         }
     };
 
-    window.editCompany = (id) => {
-        const comp = DB.getCompany(id);
+    window.editCompany = async (id) => {
+        const comp = await DB.getCompany(id);
         if (!comp) return;
 
-        populateCategoryDropdown();
+        await populateCategoryDropdown();
         document.getElementById('compId').value = comp.id;
         document.getElementById('compName').value = comp.name;
         document.getElementById('compSlug').value = comp.slug || '';
-        document.getElementById('compCategory').value = comp.categoryId || '';
+        document.getElementById('compCategory').value = comp.category_id || '';
         document.getElementById('compEmail').value = comp.email || '';
         document.getElementById('compPhone').value = comp.phone || '';
         document.getElementById('compAddress').value = comp.address || '';
 
         // Subscription fields
-        if (comp.subscription) {
-            document.getElementById('compSubStart').value = comp.subscription.start || '';
-            document.getElementById('compSubEnd').value = comp.subscription.end || '';
-            document.getElementById('compSubUsers').value = comp.subscription.users || '';
-            document.getElementById('compSubIsTrial').checked = comp.subscription.isTrial || false;
-        } else {
-            document.getElementById('compSubStart').value = '';
-            document.getElementById('compSubEnd').value = '';
-            document.getElementById('compSubUsers').value = '';
-            document.getElementById('compSubIsTrial').checked = false;
-        }
+        document.getElementById('compSubStart').value = comp.sub_start || '';
+        document.getElementById('compSubEnd').value = comp.sub_end || '';
+        document.getElementById('compSubUsers').value = comp.sub_users || '';
+        document.getElementById('compSubIsTrial').checked = comp.sub_is_trial || false;
 
         document.getElementById('subscription-fields').style.display = 'block';
         document.getElementById('modal-company-title').innerText = 'Edit Company';
@@ -460,16 +488,16 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('company');
     };
 
-    function populateCategoryDropdown() {
+    async function populateCategoryDropdown() {
         const sel = document.getElementById('compCategory');
-        const cats = DB.getCategories();
+        const cats = await DB.getCategories();
         sel.innerHTML = `<option value="">Select a category</option> ` + 
             cats.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('');
     }
 
-    function renderCompaniesList() {
-        const comps = DB.getCompanies();
-        const cats = DB.getCategories();
+    async function renderCompaniesList() {
+        const comps = await DB.getCompanies();
+        const cats = await DB.getCategories();
         
         if (comps.length === 0) {
             companiesTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 32px 0; color: var(--text-muted)">No companies added yet.</td></tr>`;
@@ -477,7 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         companiesTbody.innerHTML = comps.map(c => {
-            const cCat = cats.find(x => x.id === c.categoryId);
+            const cCat = cats.find(x => x.id === c.category_id);
             const catName = cCat ? cCat.name : 'Uncategorized';
             return `
             <tr>
@@ -498,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const formContact = document.getElementById('form-contact');
     const contactsTbody = document.getElementById('contacts-table-body');
 
-    formContact.addEventListener('submit', (e) => {
+    formContact.addEventListener('submit', async (e) => {
         e.preventDefault();
         const newContact = {
             companyId: document.getElementById('contactCompanyId').value,
@@ -507,26 +535,26 @@ document.addEventListener('DOMContentLoaded', () => {
             email: document.getElementById('contEmail').value,
             phone: document.getElementById('contPhone').value
         };
-        DB.addContact(newContact);
+        await DB.addContact(newContact);
         closeModal('contact');
-        loadCompanyDetails(newContact.companyId);
-        updateDashboard();
+        await loadCompanyDetails(newContact.companyId);
+        await updateDashboard();
     });
 
-    window.deleteContact = (id, compId) => {
+    window.deleteContact = async (id, compId) => {
         if(confirm("Delete this contact?")) {
-            DB.deleteContact(id);
-            loadCompanyDetails(compId);
-            updateDashboard();
+            await DB.deleteContact(id);
+            await loadCompanyDetails(compId);
+            await updateDashboard();
         }
     };
 
-    function loadCompanyDetails(id) {
-        const comp = DB.getCompany(id);
+    async function loadCompanyDetails(id) {
+        const comp = await DB.getCompany(id);
         if (!comp) return switchView('companies-view');
 
-        const cats = DB.getCategories();
-        const cCat = cats.find(x => x.id === comp.categoryId);
+        const cats = await DB.getCategories();
+        const cCat = cats.find(x => x.id === comp.category_id);
         
         document.getElementById('detail-company-name').innerText = comp.name;
         document.getElementById('detail-company-category').innerText = cCat ? cCat.name : 'No Category';
@@ -537,18 +565,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Render subscription info
         const subDisplay = document.getElementById('subscription-info-display');
-        if (comp.subscription && (comp.subscription.start || comp.subscription.end || comp.subscription.users)) {
+        if (comp.sub_start || comp.sub_end || comp.sub_users) {
             subDisplay.style.display = 'block';
-            document.getElementById('display-sub-start').innerText = comp.subscription.start || 'Not set';
-            document.getElementById('display-sub-end').innerText = comp.subscription.end || 'Not set';
-            document.getElementById('display-sub-users').innerText = comp.subscription.users || 'Unlimited';
-            document.getElementById('display-sub-trial').style.display = comp.subscription.isTrial ? 'inline-block' : 'none';
+            document.getElementById('display-sub-start').innerText = comp.sub_start || 'Not set';
+            document.getElementById('display-sub-end').innerText = comp.sub_end || 'Not set';
+            document.getElementById('display-sub-users').innerText = comp.sub_users || 'Unlimited';
+            document.getElementById('display-sub-trial').style.display = comp.sub_is_trial ? 'inline-block' : 'none';
         } else {
             subDisplay.style.display = 'none';
         }
 
         // Render Contacts
-        const contacts = DB.getContactsByCompany(id);
+        const contacts = await DB.getContactsByCompany(id);
         if (contacts.length === 0) {
             contactsTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 32px 0; color: var(--text-muted)">No contacts added yet.</td></tr>`;
         } else {
@@ -572,13 +600,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render Tickets
         const companyTicketsBody = document.getElementById('company-tickets-table-body');
         if (companyTicketsBody) {
-            const tix = DB.getTicketsByCompany(id);
+            const tix = await DB.getTicketsByCompany(id);
             if (tix.length === 0) {
                 companyTicketsBody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 32px 0; color: var(--text-muted)">No tickets for this company.</td></tr>`;
             } else {
                 companyTicketsBody.innerHTML = tix.map(t => `
                     <tr>
-                        <td style="font-weight: 500">${escapeHTML(t.title)} <br> <small style="color:var(--text-muted); font-weight:normal">${escapeHTML(t.desc)}</small></td>
+                        <td style="font-weight: 500">${escapeHTML(t.title)} <br> <small style="color:var(--text-muted); font-weight:normal">${escapeHTML(t.description)}</small></td>
                         <td>${getPriorityBadge(t.priority)}</td>
                         <td>
                             <select onchange="updateTicketStatus('${t.id}', this)" style="padding: 4px; border-radius: 4px; font-size: 0.85em">
@@ -639,35 +667,35 @@ document.addEventListener('DOMContentLoaded', () => {
             type: document.getElementById('tickType').value,
             filename: filename
         };
-        DB.addTicket(newTicket);
+        const saved = await DB.addTicket(newTicket);
         closeModal('ticket');
         // Re-render
-        if (currentCompanyId) loadCompanyDetails(currentCompanyId);
-        renderAllTickets();
-        updateDashboard();
+        if (currentCompanyId) await loadCompanyDetails(currentCompanyId);
+        await renderAllTickets();
+        await updateDashboard();
         // Auto-send email notification
-        const saved = DB.getTickets().find(t => t.title === newTicket.title && t.desc === newTicket.desc);
-        if (saved) sendTicketEmail(saved);
+        if (saved) await sendTicketEmail(saved);
     });
 
-    window.updateTicketStatus = (id, elm) => {
-        DB.updateTicketStatus(id, elm.value);
-        if (currentCompanyId) loadCompanyDetails(currentCompanyId);
-        updateDashboard(); 
+    window.updateTicketStatus = async (id, elm) => {
+        await DB.updateTicketStatus(id, elm.value);
+        if (currentCompanyId) await loadCompanyDetails(currentCompanyId);
+        await updateDashboard(); 
     };
 
-    window.deleteTicket = (id, compId) => {
+    window.deleteTicket = async (id, compId) => {
         if(confirm("Delete this ticket?")) {
-            DB.deleteTicket(id);
-            if (compId) loadCompanyDetails(compId);
-            renderAllTickets();
-            updateDashboard();
+            await DB.deleteTicket(id);
+            if (compId) await loadCompanyDetails(compId);
+            await renderAllTickets();
+            await updateDashboard();
         }
     };
 
-    function renderAllTickets() {
+    async function renderAllTickets() {
         const tbody = document.getElementById('tickets-table-body');
-        const tickets = DB.getTickets();
+        const tickets = await DB.getTickets();
+        const companies = await DB.getCompanies();
         
         if (tickets.length === 0) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 32px 0; color: var(--text-muted)">No tickets created yet.</td></tr>`;
@@ -675,11 +703,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         tbody.innerHTML = tickets.map(t => {
-            const comp = DB.getCompany(t.companyId);
+            const comp = companies.find(c => c.id === t.company_id);
             const compName = comp ? comp.name : 'Unknown';
             return `
             <tr>
-                <td style="font-weight: 500">${escapeHTML(t.title)} <br> <small style="color:var(--text-muted); font-weight:normal">${escapeHTML(t.desc)}</small></td>
+                <td style="font-weight: 500">${escapeHTML(t.title)} <br> <small style="color:var(--text-muted); font-weight:normal">${escapeHTML(t.description)}</small></td>
                 <td>${getTypeBadge(t.type)}</td>
                 <td><span class="badge" style="background:var(--bg-surface-hover); color:var(--text-main)">${escapeHTML(compName)}</span></td>
                 <td>${getPriorityBadge(t.priority)}</td>
@@ -701,8 +729,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /** Ticket Details & Comments Logic **/
-    window.viewTicket = (id) => {
-        loadTicketDetails(id);
+    window.viewTicket = async (id) => {
+        await loadTicketDetails(id);
         
         // Hide other views, show ticket-details
         document.querySelectorAll('.view-section').forEach(section => {
@@ -714,10 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
     };
 
-    document.getElementById('btn-back-tickets').addEventListener('click', () => {
-        // Simple back logic depending on what was active before could be complex, 
-        // We'll figure out: if we have a currentCompanyId we might go back to companies OR tickets.
-        // For simplicity, always go back to the global tickets list view:
+    document.getElementById('btn-back-tickets').addEventListener('click', async () => {
         document.querySelectorAll('.nav-item').forEach(nav => {
             if (nav.dataset.target === 'tickets-view') nav.classList.add('active');
             else nav.classList.remove('active');
@@ -726,18 +751,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (section.id === 'tickets-view') section.classList.add('active');
             else section.classList.remove('active');
         });
-        renderAllTickets();
+        await renderAllTickets();
     });
 
-    function loadTicketDetails(id) {
-        const ticket = DB.getTickets().find(t => t.id === id);
+    async function loadTicketDetails(id) {
+        const tickets = await DB.getTickets();
+        const ticket = tickets.find(t => t.id === id);
         if (!ticket) return;
 
-        const comp = DB.getCompany(ticket.companyId);
+        const comp = await DB.getCompany(ticket.company_id);
         
         document.getElementById('detail-ticket-title').innerText = ticket.title;
         document.getElementById('detail-ticket-subtitle').innerText = `Reported by ${comp ? comp.name : 'Unknown'}`;
-        document.getElementById('detail-ticket-desc').innerText = ticket.desc;
+        document.getElementById('detail-ticket-desc').innerText = ticket.description;
         document.getElementById('detail-ticket-priority').innerHTML = getPriorityBadge(ticket.priority) + ' ' + getTypeBadge(ticket.type);
         document.getElementById('detail-ticket-status').value = ticket.status;
         
@@ -759,28 +785,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const statusSel = document.getElementById('detail-ticket-status');
-        statusSel.onchange = (e) => {
-            DB.updateTicketStatus(ticket.id, e.target.value);
-            DB.addComment({ ticketId: ticket.id, text: `Status changed to ${e.target.value}`, type: 'system' });
-            renderComments(ticket.id);
-            updateDashboard();
-            renderAllTickets();
+        statusSel.onchange = async (e) => {
+            await DB.updateTicketStatus(ticket.id, e.target.value);
+            await DB.addComment({ ticketId: ticket.id, text: `Status changed to ${e.target.value}`, type: 'system' });
+            await renderComments(ticket.id);
+            await updateDashboard();
+            await renderAllTickets();
         };
         
         // Setup Assignee
         const assigneeSel = document.getElementById('detail-ticket-assignee');
-        const users = DB.getUsers();
-        assigneeSel.innerHTML = `<option value="">Unassigned</option>` + users.map(u => `<option value="${escapeHTML(u.id)}">${escapeHTML(u.name)} (${escapeHTML(u.role)})</option>`).join('');
-        assigneeSel.value = ticket.assigneeId || '';
+        const users = await DB.getUsers();
+        assigneeSel.innerHTML = `<option value="">Unassigned</option>` + users.map(u => `<option value="${escapeHTML(u.id)}">${escapeHTML(u.full_name || u.email)} (${escapeHTML(u.role)})</option>`).join('');
+        assigneeSel.value = ticket.assignee_id || '';
         
-        assigneeSel.onchange = (e) => {
+        assigneeSel.onchange = async (e) => {
             const val = e.target.value;
-            DB.updateTicketAssignee(ticket.id, val);
+            await DB.updateTicketAssignee(ticket.id, val);
             const userObj = users.find(u => u.id === val);
             const assigneeName = userObj ? userObj.name : 'Unassigned';
-            DB.addComment({ ticketId: ticket.id, text: `Assigned to ${assigneeName}`, type: 'system' });
-            renderComments(ticket.id);
-            updateDashboard();
+            await DB.addComment({ ticketId: ticket.id, text: `Assigned to ${assigneeName}`, type: 'system' });
+            await renderComments(ticket.id);
+            await updateDashboard();
         };
 
         const btnEditTicket = document.getElementById('btn-edit-ticket');
@@ -788,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnEditTicket.onclick = () => {
                 document.getElementById('editTicketId').value = ticket.id;
                 document.getElementById('editTickTitle').value = ticket.title;
-                document.getElementById('editTickDesc').value = ticket.desc;
+                document.getElementById('editTickDesc').value = ticket.description;
                 document.getElementById('editTickPriority').value = ticket.priority || 'Medium';
                 document.getElementById('editTickType').value = ticket.type || 'Bug';
                 const mo = document.getElementById('modal-edit-ticket');
@@ -808,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSendEmail.disabled = true;
                 try {
                     await sendTicketEmail(ticket);
-                    renderComments(ticket.id);
+                    await renderComments(ticket.id);
                     alert(`✅ Email sent successfully!`);
                 } catch (err) {
                     alert('Email Error: ' + (err.text || err.message || 'Unknown error'));
@@ -823,9 +849,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnView = document.getElementById('btn-view-github');
         
         if (btnPush && btnView) {
-            if (ticket.githubUrl) {
+            if (ticket.github_url) {
                 btnPush.style.display = 'none';
-                btnView.href = ticket.githubUrl;
+                btnView.href = ticket.github_url;
                 btnView.style.display = 'inline-flex';
             } else {
                 btnView.style.display = 'none';
@@ -843,7 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     try {
                         const compName = comp ? comp.name : 'Unknown';
-                        const cCat = DB.getCategories().find(x => x.id === (comp ? comp.categoryId : null));
+                        const cats = await DB.getCategories();
+                        const cCat = cats.find(x => x.id === (comp ? comp.category_id : null));
                         
                         const labels = [];
                         if (ticket.priority) labels.push(`Priority: ${ticket.priority}`);
@@ -853,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const payload = {
                             title: `[CS] ${ticket.title}`,
-                            body: `**From Customer Support Portal**\n**Company:** ${compName}\n**Priority:** ${ticket.priority || 'Medium'}\n\n**Description:**\n${ticket.desc}`,
+                            body: `**From Customer Support Portal**\n**Company:** ${compName}\n**Priority:** ${ticket.priority || 'Medium'}\n\n**Description:**\n${ticket.description}`,
                             labels: labels
                         };
                         
@@ -874,10 +901,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const data = await response.json();
                         
-                        DB.updateTicketDetails(ticket.id, { ...ticket, githubUrl: data.html_url });
-                        DB.addComment({ ticketId: ticket.id, text: `Escalated to GitHub Issue #${data.number}`, type: 'system' });
+                        await DB.updateTicketDetails(ticket.id, { ...ticket, githubUrl: data.html_url });
+                        await DB.addComment({ ticketId: ticket.id, text: `Escalated to GitHub Issue #${data.number}`, type: 'system' });
                         
-                        loadTicketDetails(ticket.id);
+                        await loadTicketDetails(ticket.id);
                     } catch (err) {
                         alert('GitHub Error: ' + err.message);
                         btnPush.innerHTML = `<i class="ri-github-fill"></i> Push to GitHub`;
@@ -888,12 +915,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         document.getElementById('commentTicketId').value = ticket.id;
-        renderComments(ticket.id);
+        await renderComments(ticket.id);
     }
 
-    function renderComments(ticketId) {
+    async function renderComments(ticketId) {
         const list = document.getElementById('comments-list');
-        const comments = DB.getComments(ticketId);
+        const comments = await DB.getComments(ticketId);
         
         if (comments.length === 0) {
             list.innerHTML = `<div style="text-align:center; color:var(--text-muted); margin-top:24px;">No timeline activity yet.</div>`;
@@ -901,7 +928,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         list.innerHTML = comments.map(c => {
-            const date = new Date(c.createdAt).toLocaleString();
+            const date = new Date(c.created_at || c.createdAt).toLocaleString();
             const isSystem = c.type === 'system';
             return `
             <div class="comment-bubble" style="margin-bottom:12px; ${isSystem ? 'background: #fffbeb; border-color: #fde68a;' : ''}">
@@ -915,21 +942,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const formComment = document.getElementById('form-comment');
     if (formComment) {
-        formComment.addEventListener('submit', (e) => {
+        formComment.addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = document.getElementById('commentText');
             const tId = document.getElementById('commentTicketId').value;
             if (input.value.trim() && tId) {
-                DB.addComment({ ticketId: tId, text: input.value.trim(), type: 'user' });
+                await DB.addComment({ ticketId: tId, text: input.value.trim(), type: 'user' });
                 input.value = '';
-                renderComments(tId);
+                await renderComments(tId);
             }
         });
     }
 
     const formEditTicket = document.getElementById('form-edit-ticket');
     if (formEditTicket) {
-        formEditTicket.addEventListener('submit', (e) => {
+        formEditTicket.addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('editTicketId').value;
             const updates = {
@@ -938,28 +965,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 priority: document.getElementById('editTickPriority').value,
                 type: document.getElementById('editTickType').value
             };
-            DB.updateTicketDetails(id, updates);
-            DB.addComment({ ticketId: id, text: `Ticket details updated`, type: 'system' });
+            await DB.updateTicketDetails(id, updates);
+            await DB.addComment({ ticketId: id, text: `Ticket details updated`, type: 'system' });
             
             const mo = document.getElementById('modal-edit-ticket');
             if (mo) mo.classList.remove('active');
             
             // Re-render
-            const ticket = DB.getTickets().find(t => t.id === id);
+            const tickets = await DB.getTickets();
+            const ticket = tickets.find(t => t.id === id);
             if (ticket) {
                 document.getElementById('detail-ticket-title').innerText = ticket.title;
-                document.getElementById('detail-ticket-desc').innerText = ticket.desc;
+                document.getElementById('detail-ticket-desc').innerText = ticket.description;
                 document.getElementById('detail-ticket-priority').innerHTML = getPriorityBadge(ticket.priority) + ' ' + getTypeBadge(ticket.type);
-                renderComments(id);
+                await renderComments(id);
             }
-            renderAllTickets();
+            await renderAllTickets();
         });
     }
 
     /** View: Team **/
     const formUser = document.getElementById('form-user');
     if (formUser) {
-        formUser.addEventListener('submit', (e) => {
+        formUser.addEventListener('submit', async (e) => {
             e.preventDefault();
             const newUser = {
                 name: document.getElementById('userName').value,
@@ -967,11 +995,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 password: document.getElementById('userPassword').value,
                 role: document.getElementById('userRole').value
             };
-            DB.addUser(newUser);
+            await DB.addUser(newUser);
             closeModal('user');
             document.getElementById('form-user').reset();
-            renderTeamList();
-            updateDashboard();
+            await renderTeamList();
+            await updateDashboard();
         });
     }
 
@@ -983,18 +1011,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    window.deleteUser = (id) => {
+    window.deleteUser = async (id) => {
         if(confirm("Delete this user?")) {
-            DB.deleteUser(id);
-            renderTeamList();
-            updateDashboard();
+            await DB.deleteUser(id);
+            await renderTeamList();
+            await updateDashboard();
         }
     };
 
-    function renderTeamList() {
+    async function renderTeamList() {
         const tbody = document.getElementById('team-table-body');
         if (!tbody) return;
-        const users = DB.getUsers();
+        const users = await DB.getUsers();
         
         if (users.length === 0) {
             tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 32px 0; color: var(--text-muted)">No team members added yet.</td></tr>`;
@@ -1003,8 +1031,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = users.map(u => `
             <tr>
-                <td style="font-weight: 500">${escapeHTML(u.name)}</td>
-                <td>${escapeHTML(u.email)}</td>
+                <td style="font-weight: 500">${escapeHTML(u.full_name || 'No Name')}</td>
+                <td>${escapeHTML(u.email || '-')}</td>
                 <td><span class="badge" style="background:var(--bg-surface-hover); color:var(--text-main)">${escapeHTML(u.role)}</span></td>
                 <td>
                     ${u.role !== 'Admin' || users.length > 1 ? `<button class="btn btn-outline btn-small btn-danger-outline" onclick="deleteUser('${u.id}')"><i class="ri-delete-bin-line"></i></button>` : `<span class="badge">Primary</span>`}
@@ -1086,7 +1114,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Init App
-    if (checkAuth()) {
-        updateDashboard();
-    }
+    (async () => {
+        if (await checkAuth()) {
+            await updateDashboard();
+        }
+    })();
 });
