@@ -110,6 +110,11 @@ const DB = {
     },
 
     // Contacts
+    async getAllContacts() {
+        const { data, error } = await supabaseClient.from('contacts').select('*');
+        if (error) console.error('Error fetching all contacts:', error);
+        return data || [];
+    },
     async getContactsByCompany(companyId) {
         const { data, error } = await supabaseClient.from('contacts').select('*').eq('company_id', companyId);
         if (error) console.error('Error fetching contacts:', error);
@@ -445,11 +450,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function updateDashboard() {
         const comps = await DB.getCompanies();
         const tix = await DB.getTickets();
-        // For total contacts, we'd need a separate fetch or a complex query, 
-        // for now let's just count from fetched companies if we had contacts locally 
-        // but we'll leave it as a placeholder or fetch separately
+        const contacts = await DB.getAllContacts();
+
         document.getElementById('stat-companies').innerText = comps.length;
         document.getElementById('stat-tickets').innerText = tix.length;
+        document.getElementById('stat-contacts').innerText = contacts.length;
     }
 
     /** View: Settings (Categories) **/
