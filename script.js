@@ -334,6 +334,10 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal('ticket');
     });
 
+    document.getElementById('btn-edit-company').addEventListener('click', () => {
+        if (currentCompanyId) window.editCompany(currentCompanyId);
+    });
+
     /** Render Dashboard **/
     function updateDashboard() {
         document.getElementById('stat-companies').innerText = DB.getCompanies().length;
